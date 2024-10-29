@@ -1,0 +1,9 @@
+#!/bin/bash
+ 
+/usr/bin/security authorizationdb write system.preferences.dateandtime.changetimezone allow
+/usr/bin/security authorizationdb write system.preferences.datetime authenticate-session-owner-or-admin
+
+## Create dummy receipt to mark complete
+touch /Library/Receipts/com.twcs.changetimezone.bom
+
+exit 0;
