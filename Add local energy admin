@@ -1,0 +1,9 @@
+#!/bin/bash
+
+#Unlock Energy Saver preference pane 
+/usr/bin/security authorizationdb write system.preferences.energysaver allow
+
+## Create dummy receipt to mark complete
+touch /Library/Receipts/com.twcs.energysaver.bom
+
+exit 0;
