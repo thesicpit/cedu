@@ -1,0 +1,11 @@
+#!/bin/bash
+
+ardAccountName="ladmin"
+
+# Enable ARD (Remote Management) for gpsadmin
+/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -users "$ardAccountName" -privs -all -allowAccessFor -allUsers -clientopts -setmenuextra -menuextra no -restart -agent -menu
+
+# Enable SSH (Remote Login)
+/bin/launchctl load -w /System/Library/LaunchDaemons/ssh.plist
+
+exit 0
