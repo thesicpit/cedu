@@ -1,0 +1,13 @@
+#!/bin/bash
+
+byHostPath="/var/db/locationd/Library/Preferences/ByHost/com.apple.locationd"
+
+# Read current state
+locationServicesState=$(sudo defaults read "$byHostPath" LocationServicesEnabled)
+
+if [[ "$locationServicesState" -eq "1" ]]; then
+    echo "Location Services already enabled"
+else
+    /usr/bin/defaults write "$byHostPath" LocationServicesEnabled -int 1
+    echo "Enabled Location Services, reboot to apply change"
+fi
