@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Function to get the latest release from GitHub
+get_latest_release() {
+  curl --silent "https://api.github.com/repos/debauchee/barrier/releases/latest" | \
+  grep '"tag_name":' | \
+  sed -E 's/.*"([^"]+)".*/\1/'
+}
+
+# Fetch the latest release version
+latest_version=$(get_latest_release)
+
+if [ -z "$latest_version" ]; then
+  echo "Error: Unable to fetch the latest Barrier macOS version."
+  exit 1
+fi
+
+echo "Latest version: $latest_version"
+
+# Construct the download URL for the latest .dmg file
+dmg_url=$(curl -s "https://api.github.com/repos/debauchee/barrier/releases/latest" | \
+  grep "browser_download_url.*dmg" | \
+  cut -d '"' -f 4)
+
+if [ -z "$dmg_url" ]; then
+  echo "Error: Could not find the .dmg download URL."
+  exit 1
+fi
+
+echo "Downloading from: $dmg_url"
+
+# Download the latest .dmg file to /tmp
+dmg_file="/tmp/barrier-latest.dmg"
+curl -L -o "$dmg_file" "$dmg_url"
+
+# Verify the download was successful
+if [ ! -f "$dmg_file" ]; then
+  echo "Error: Download failed."
+  exit 1
+fi
+
+echo "Download successful. Mounting the .dmg..."
+
+# Mount the .dmg file
+volume_name=$(hdiutil attach "$dmg_file" | grep Volumes | awk '{print $3}')
+
+if [ -z "$volume_name" ]; then
+  echo "Error: Could not mount the .dmg file."
+  exit 1
+fi
+
+echo "Mounted at: $volume_name"
+
+# Copy the app to /Applications
+if [ -d "$volume_name/Barrier.app" ]; then
+  echo "Installing Barrier..."
+  cp -R "$volume_name/Barrier.app" /Applications/
+else
+  echo "Error: Barrier.app not found in the mounted volume."
+  exit 1
+fi
+
+# Eject the mounted volume
+hdiutil detach "$volume_name"
+
+# Clean up by removing the downloaded .dmg file
+rm "$dmg_file"
+echo "Barrier has been installed successfully and clean-up done."
+
+#touch /Library/Receipts/com.gimp.org.v2.10.bom
+touch /Library/Receipts/$4
