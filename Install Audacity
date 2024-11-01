@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Define the GitHub API URL for the latest release of Audacity
+github_api_url="https://api.github.com/repos/audacity/audacity/releases/latest"
+
+# Step 1: Get the latest release download URL for the universal `.dmg` file
+dmg_url=$(curl -s $github_api_url | grep "browser_download_url.*universal.dmg" | cut -d '"' -f 4)
+
+# Step 2: Check if the dmg_url is found
+if [ -z "$dmg_url" ]; then
+  echo "Error: Could not find a universal .dmg file in the latest release."
+  exit 1
+fi
+
+echo "Downloading Audacity from: $dmg_url"
+
+# Step 3: Download the .dmg file to /tmp
+dmg_file="/tmp/audacity_latest.dmg"
+curl -L -o "$dmg_file" "$dmg_url"
+
+# Step 4: Mount the .dmg file
+hdiutil attach "$dmg_file" -nobrowse -quiet
+
+# Step 5: Find the mounted volume
+volume_name=$(hdiutil info | grep "/Volumes/" | grep "Audacity" | awk '{print $NF}' | head -n 1)
+
+if [ -z "$volume_name" ]; then
+  echo "Error: Could not find the mounted volume for Audacity."
+  exit 1
+fi
+
+echo "Mounted at: $volume_name"
+
+# Step 6: Copy Audacity.app to /Applications
+if [ -d "$volume_name/Audacity.app" ]; then
+  cp -R "$volume_name/Audacity.app" /Applications/
+else
+  echo "Error: Audacity.app not found in mounted volume."
+  exit 1
+fi
+
+# Step 7: Eject the mounted volume
+hdiutil detach "$volume_name" -quiet
+
+# Step 8: Clean up by removing the downloaded .dmg file
+rm "$dmg_file"
+
+echo "Audacity has been installed successfully."
+
+
+#touch /Library/Receipts/com.gimp.org.v2.10.bom
+touch /Library/Receipts/$4
