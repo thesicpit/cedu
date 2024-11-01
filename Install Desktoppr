@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# URL of the DMG file
+#DMG_URL="https://referrals.brave.com/latest/BRV002/Brave-Browser.dmg"
+DMG_URL="$4"
+# Destination directory to download the DMG file
+DEST_DIR="/tmp"
+
+# Name of the downloaded DMG file
+DMG_FILE="Brave-Browser.dmg"
+
+# Mount point for the DMG file
+MOUNT_POINT="/Volumes/Brave-Browser"
+
+# Download the DMG file
+echo "Downloading DMG file..."
+curl -Lo "$DEST_DIR/$DMG_FILE" "$DMG_URL"
+
+# Mount the DMG file
+echo "Mounting DMG file..."
+hdiutil attach "$DEST_DIR/$DMG_FILE"
+
+# Find the mounted volume
+MOUNTED_VOLUME=$(ls /Volumes | grep "Brave Browser")
+
+# Install the application
+if [ -n "$MOUNTED_VOLUME" ]; then
+    echo "Installing Brave-Browser.dmg..."
+    cp -R "/Volumes/$MOUNTED_VOLUME/Brave Browser.app" /Applications
+    echo "Installation complete."
+else
+    echo "Failed to find mounted volume. Installation aborted."
+    exit 1
+fi
+
+# Unmount the DMG file
+echo "Unmounting DMG file..."
+hdiutil detach "/Volumes/$MOUNTED_VOLUME"
+
+echo "Cleanup..."
+# Clean up the downloaded DMG file
+rm "$DEST_DIR/$DMG_FILE"
+
+echo "Installation finished."
