@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Uptime days
+dayCount=$( uptime | awk -F "(up | days)" '{ print $2 }' )
+
+if ! [ "$dayCount" -eq "$dayCount" ] 2> /dev/null ; then
+  dayCount="0"
+fi
+
+# If computer's uptime is less than 30 days, just exit
+if [ "$dayCount" -lt "30" ]; then
+  exit 0
+fi
+
+# Display restart dialog
+/usr/bin/osascript << EOF
+
+set softwareUpdateIconPath to "/System/Library/UserNotifications/Bundles/com.apple.SoftwareUpdateNotification.bundle/Contents/Resources/SoftwareUpdate.icns"
+
+display dialog "It has been over a month since your computer last restarted. To maintain optimal performance would you like to restart now?" buttons {"Cancel", "Restart"} default button 2 with title "System Maintenance" with icon POSIX file softwareUpdateIconPath
+if button returned of result is "Restart" then
+	tell application "System Events"
+    	restart
+    end tell
+end if
+
+EOF
