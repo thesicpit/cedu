@@ -1,0 +1,184 @@
+ # Ensure Execution Policy and Modules are loaded
+Set-ExecutionPolicy RemoteSigned -Force
+Import-Module ActiveDirectory
+Import-Module AzureAD
+
+# Begin Logging
+$ErrorActionPreference = "Stop"
+$TranscriptPath = "C:\Scripts\Logs\output.txt"
+Start-Transcript -Path $TranscriptPath -Append
+
+# Get the user’s Windows username
+$DN1 = Read-Host "Please enter the user's Windows username"
+
+# Disable user in Active Directory and update attributes
+Try {
+    # Disable the user and update various attributes in AD
+    Set-ADUser -Identity $DN1 -Enabled $false -Replace @{
+        msnpallowdialin = $false
+        description = "LEFT"
+        physicalDeliveryOfficeName = "LEFT"
+        department = "LEFT"
+        pager = "XXXX"
+        title = "LEFT"
+        facsimileTelephoneNumber = "NOROLE"
+    }
+
+    Write-Host "User $DN1 disabled and attributes updated." -ForegroundColor Green
+} Catch {
+    Write-Host "Error disabling user or updating attributes: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# Get the current date in the desired format
+$TodaysDate = Get-Date -Format "dd-MM-yyyy"
+
+# Define the log file path
+$LogFilePath = "C:\Scripts\Logs\$DN1-$TodaysDate.csv"
+
+# Retrieve user's group memberships and extract the group names
+$Groups = Get-ADUser -Identity $DN1 -Properties MemberOf | 
+    Select-Object -ExpandProperty MemberOf | 
+    ForEach-Object {
+        # Extract the CN (group name) from the distinguished name
+        $_.Split(",")[0] -replace "^CN=", ""
+    }
+
+# Prepare the data for CSV format by converting group names into a custom object
+$Groups | ForEach-Object {
+    [PSCustomObject]@{
+        GroupName = $_
+    }
+} | Export-Csv -Path $LogFilePath -NoTypeInformation
+
+# Log user details and group memberships
+Try {
+    Get-ADUser -Identity $DN1 -Properties samaccountname, displayname | Format-Table -AutoSize -Wrap | Out-File C:\Scripts\Logs\Disable_Users_Groups.txt -Append
+    (Get-ADUser $DN1 -Properties MemberOf).MemberOf | ForEach-Object { $_.split(",")[0].replace("CN=", "") } | Out-File C:\Scripts\Logs\Disable_Users_Groups.txt -Append
+
+    Write-Host "User details and group memberships logged." -ForegroundColor Green
+} Catch {
+    Write-Host "Error logging user details or groups: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# Remove user from Active Directory groups
+Try {
+    Get-ADUser -Identity $DN1 -Properties MemberOf | ForEach-Object {
+        $_.MemberOf | ForEach-Object {
+            Remove-ADGroupMember -Identity $_ -Members $DN1 -Confirm:$false
+            Write-Host "Removed $DN1 from AD Group: $_" -ForegroundColor Green
+        }
+    }
+} Catch {
+    Write-Host "Error removing user from AD groups: $($_.Exception.Message)" -ForegroundColor Red
+}
+# Log completion
+Write-Host "The user's groups have been logged to $LogFilePath and removed from AD groups." -ForegroundColor Green
+
+# Trigger Azure AD Sync
+Write-Host "Initiating Azure AD Sync..." -ForegroundColor Blue
+Try {
+    Invoke-Command -FilePath "C:\Scripts\AAD-Delta-SYNC.ps1" -ComputerName stthomashv
+    Write-Host "Azure AD Delta Sync initiated." -ForegroundColor Green
+} Catch {
+    Write-Host "Error initiating Azure AD Sync: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# Connect to Azure AD and remove user from Azure security groups
+$UserToRemove = $DN1 + "@"
+
+Try {
+    Connect-AzureAD | Out-Null
+
+    $User = Get-AzureADUser -ObjectId $UserToRemove
+    if ($User) {
+        $GroupMemberships = Get-AzureADUserMembership -ObjectId $User.ObjectId -All $true | Where-Object { $_.ObjectType -eq "Group" -and $_.SecurityEnabled -eq $true -and $_.MailEnabled -eq $false }
+
+        foreach ($Group in $GroupMemberships) {
+            Try {
+                Remove-AzureADGroupMember -ObjectId $Group.ObjectID -MemberId $User.ObjectId
+                Write-Host "Removed $UserToRemove from Azure Group: $($Group.DisplayName)" -ForegroundColor Green
+            } Catch {
+                Write-Host "Error removing $UserToRemove from Azure Group $($Group.DisplayName): $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+    } else {
+        Write-Host "Azure AD user not found: $UserToRemove" -ForegroundColor Red
+    }
+} Catch {
+    Write-Host "Error processing Azure AD: $($_.Exception.Message)" -ForegroundColor Red
+} Finally {
+    Disconnect-AzureAD
+    Write-Host "Disconnected from Azure AD." -ForegroundColor Green
+}
+
+Write-Host "Reproccessing $UserToRemove licences.." -ForegroundColor Blue
+
+<#
+# Function to log messages
+function Log-Message {
+    param (
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
+    $timestamp = Get-Date -Format "dd-MM-yyyy HH:mm:ss"
+    Write-Host "$timestamp [$Level] $Message"
+    #Add-Content -Path $TranscriptPath -Value "$timestamp [$Level] $Message"
+}
+
+# Assuming $UserToRemove and $userId are defined previously in your script
+try {
+    Log-Message "Reprocessing $UserToRemove licenses..." 
+
+    # Import the module
+    Import-Module Microsoft.Graph.Users.Actions -ErrorAction Stop
+
+    # Connect to MS Graph
+    Connect-MgGraph -Scopes 'Directory.ReadWRite.All'
+
+    # Invoke license update
+    Invoke-MgLicenseUser -UserId $UserToRemove -ErrorAction Stop
+
+    Log-Message "$UserToRemove licenses updated successfully." -Level "SUCCESS"
+
+    # Disconnect from Microsoft Graph
+    Disconnect-MgGraph
+}
+catch {
+    Log-Message "Error processing licenses for $UserToRemove $_" -Level "ERROR"
+} 
+#>
+
+#you need AzureAdpreview to use Set-AzureADMSGroup 
+if (-not(Get-Module -ListAvailable -Name AzureADPreview)){
+    Install-module AzureADPreview -AllowClobber -erroraction Stop
+    }
+Import-Module -Name AzureADPreview -ErrorAction stop
+
+#connect with azuread
+Connect-AzureAD
+
+Write-Host "retrieving all dynamic host groups"
+#get all dynamic groups on azure
+$dynamicGroups = Get-AzureADMSGroup -all 1 |where {$_.GroupTypes -eq 'DynamicMembership'}
+write-host "count of dynamic groups found:" $dynamicGroups.count
+
+
+for ($i = 0; $i -lt $dynamicGroups.count; $i++ )
+{
+   $group = $dynamicGroups[$i]
+   Write-Progress -Activity "Search in Progress" -Status "$i% Complete:" -PercentComplete $i -CurrentOperation ("processing " + [string]$group.displayName)  
+   #an "have you tried turning it off and on again", to force azure to update the dynamic groups
+   Set-AzureADMSGroup -Id $group.Id -MembershipRuleProcessingState "paused"
+   #little pause to let the processing state take effect
+   Start-Sleep(1)
+   Set-AzureADMSGroup -Id $group.Id -MembershipRuleProcessingState "on"
+}
+
+Write-Host "$UserToRemove licences updated." -ForegroundColor Green
+
+# Confirmation and Finish Logging
+Write-Host "======================================="
+Write-Host "The user $DN1 was successfully disabled."
+Write-Host "======================================="
+Stop-Transcript
+ 
