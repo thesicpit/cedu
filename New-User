@@ -1,0 +1,168 @@
+ Set-ExecutionPolicy -ExecutionPolicy Unrestricted
+
+$body = @()
+$nl = [Environment]::NewLine
+
+
+<# $csv = Read-Host 'Enter the UNC path + file.csv ie. \\temp\student.csv' #>
+$csv = 'C:\Scripts\New Staff Template.csv'
+if (![System.IO.File]::Exists($csv)) {
+	Write-Host 'csv path does not exist. Exiting'
+	exit;
+}
+
+<# Read contents of CSV file #> 
+$Users = Import-Csv -Delimiter "," -Path "$($csv)" | sort "Preferred Name" -descending
+
+<#$OUBase = 'OU=,OU=,OU=,DC=,DC='#>
+$OUBase = 'OU=,OU=,OU=,DC=,DC='
+if ($OUBase -eq '' -or $OUBase -eq $Null) {
+	Write-Host 'OU path blank. Exiting'
+	exit;
+}
+
+<# $email = Read-Host 'Enter email address to send report to, i.e. @: ' #>
+<#
+$CEOmail = "@"
+if ($email -eq '' -or $email -eq $Null) {
+	Write-Host 'Email left blank. Exiting'
+	exit;
+}
+#>
+foreach ($User in $Users) { 
+
+    $DN1 = $User."First Initial" + $User."Family Name"
+    $UPNE = "@"
+    $UMAIL = "$DN1" + "$UPNE"
+    $Department = $User."Department"
+    $Displayname = $User."Preferred Name" + " " + $User."Family Name"
+    $UserFirstname = $User."Preferred Name"
+    $UserLastname = $User."Family Name"
+    $Description = $User."Description"
+    $Password = $User."Password"
+    $OU = "OU=$Department,$OUBase"
+    $Alias = "$DN1"
+    $UserLike = $User."UserLike"
+    $pcpin = $User."pcpin"
+    $cesasharerole = $User."cesasharerole"
+    $email = "@"
+    $Extra1 = "@"
+    $Extra2 = "@"
+    $Extra3 = "@"
+
+#Check if Department OU exists and create one if not
+if (!(Get-ADOrganizationalUnit -Filter "distinguishedName -eq '$OU'")) {
+    New-ADOrganizationalUnit -Name $Department -Path $OUBase
+}
+
+$SS = ConvertTo-SecureString $Password -AsPlainText -Force
+
+New-ADUser -Name "$Displayname" -DisplayName "$Displayname" -Path "$OU" -UserPrincipalName $UMAIL -SamAccountName $DN1 `
+-GivenName "$UserFirstname" -Surname "$UserLastname" -Description "$Description" -AccountPassword $SS `
+-PasswordNeverExpires $true -Enabled $true -ChangePasswordAtLogon $false
+
+
+Set-ADUser -Identity $DN1 -Replace @{mail="$($UMAIL)"} 
+Set-ADUser -Identity $DN1 -Replace @{physicalDeliveryOfficeName="$($Department)"}
+Set-ADUser -Identity $DN1 -Replace @{department="$($Department)"}
+Set-ADUser -Identity $DN1 -Replace @{pager="$($pcpin)"}
+Set-ADUser -Identity $DN1 -Replace @{title="$($Description)"}
+Set-ADUser -Identity $DN1 -Replace @{facsimileTelephoneNumber="$($cesasharerole)"}
+
+
+Get-ADUser -Identity $UserLike -Properties memberof | Select-Object -ExpandProperty memberof | Add-ADGroupMember -Members $Alias -PassThru | Out-Null | Select-Object -Property SamAccountName 
+
+
+    $Body += ("New user {0} created `n Email = {1} `n Username = {2} `n Password = {3} `n Printing PIN = {4}" -f $Displayname,$UMAIL,$DN1,$Password,$pcpin) + $nl 
+    $Body2 = ("Hi, `n `n Please Setup CESA access for: `n `n Name = {0} `n Email = {1} `n Role = {2} `n School = School `n `n Thanks in advance. `n Kind Regards, `n BOB" -f $Displayname,$UMAIL,$Description) + $nl
+
+    $Staff += ("New user {0} created `n Email = {1} `n Username = {2} `n Password = {3} `n Printing PIN = {4}" -f $Displayname,$UMAIL,$DN1,$Password,$PCPin) + $nl
+    $Staff2 = ("Hi, `n `n Please Setup CESA access for: `n `n Name = {0} `n Email = {1} `n Role = {2} `n School = School `n `n Thanks in advance. `n Kind Regards, `n BOB" -f $Displayname,$UMAIL,$Description) + $nl
+
+
+Send-MailMessage -To “$email” -Cc "$Extra1", "$Extra2", "$Extra3" -From “@" -Subject “New User - $Displayname - created” -Body ($Staff | Out-String) -SmtpServer “smtp” -Port 25
+Send-MailMessage -To “$email” -From “@" -Subject “New User - $Displayname - CESASync Access Required” -Body ($Staff2 | Out-String) -SmtpServer “smtp” -Port 25
+
+
+<#
+Send-MailMessage -To '$CEOmail'? -From "@" -Subject 'New User - $Displayname - created' -Body "$Body" -SmtpServer "stgapps.thomas.internal" -Port 25
+#>
+
+$mailcreds = @{
+    From = '@'
+    To = '@','@'
+    Subject = "New User - $Displayname - created"
+    Body = "$Body"
+    SMTPServer = 'stgapps.thomas.internal'
+    Port = '25'
+}
+
+Send-MailMessage @mailcreds
+
+    $Body =$null
+    $Body2 = $Null
+    $Staff = $Null
+    $Staff2 = $Null
+
+<#
+$mailcesaaccess = @{
+    From = '@'
+    To = '@'
+    Subject = "Add COMPANY guest access for - $Displayname"
+    Body = "$Body2"
+    SMTPServer = 'smtp'
+    Port = '25'
+}
+
+Send-MailMessage @mailcesaaccess
+#>
+
+}
+
+<#
+    Run Dir Sync
+#>
+Invoke-Command -FilePath C:\Scripts\AAD-Delta-SYNC.ps1 -ComputerName SERVER -Credential $cred
+
+<#
+    Sleep so Azure Catches up
+    Sleep Timer
+#>
+$seconds = 120
+1..$seconds |
+ForEach-Object { $percent = $_ * 100 / $seconds 
+
+Write-Progress -Activity Break -Status "$($seconds - $_) seconds remaining..." -PercentComplete $percent 
+
+Start-Sleep -Seconds 1
+}
+
+Connect-AzureAD
+#Get all users's UPN and OnjectID
+$users = Get-AzureADUser | Select-Object UserPrincipalName, ObjectID
+
+#$DN1 = Read-Host "Please enter the sauce users Windows username"
+#$DN2 = Read-Host "Please enter the destination users Windows username"
+$DN2 = $UserLike
+# Set the UserPrincipalName of the user to be removed from all groups
+$Pie = $DN1 + "@"
+$Sauce = $DN2 + "@"
+
+# Get ObjectId based on username of user to copy from and user to copy to
+$Sauces = Get-AzureADUser -ObjectID $Sauce
+$Pies = Get-AzureADUser -ObjectID $Pie
+
+# Get Sauce users group memberships
+$membershipGroups = Get-AzureADUserMembership -ObjectId $Sauces.ObjectId
+
+Write-Host "\-- Groups available to copy from" $Sauce to $Pie "--\" -ForegroundColor Yellow
+
+foreach($group in $membershipGroups) {
+Write-Host $group.DisplayName
+Write-Host "[!] - Adding" $Pies.UserPrincipalName " to " $group.DisplayName "... " -ForegroundColor Yellow -nonewline
+Add-AzureADGroupMember -ObjectId $group.ObjectId -RefObjectId $Pies.ObjectId
+Write-Host "Done"
+}
+# Disconnect from your Azure AD tenant
+Disconnect-AzureAD
+ 
