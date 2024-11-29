@@ -1,0 +1,57 @@
+ Set-ExecutionPolicy -ExecutionPolicy Unrestricted
+
+$body = @()
+$nl = [Environment]::NewLine
+
+<# $csv = Read-Host 'Enter the UNC path + file.csv ie. \\temp\student.csv' #>
+$csv = 'C:\Scripts\Damaged-Devices-List.csv'
+if (![System.IO.File]::Exists($csv)) {
+	Write-Host 'csv path does not exist. Exiting'
+	exit;
+}
+
+<# Read contents of CSV file #> 
+$Damage = Import-Csv -Delimiter "," -Path "$($csv)" | sort "SFName" -descending
+
+foreach ($report in $Damage) {
+
+$Displayname = $Damage."SFName" + " " + $Damage."SLName"
+$SEMAIL = $Damage."SEMAIL"
+$SUPN = $Damage."SUPN"
+$Teacher = $Damage."FNTeach" + " " + $Damage."LNTeach"
+$TEMAIL = $Damage."TEMAIL"
+$Serial = $Damage."Serial"
+$Year = $Damage."Year"
+$DAmageRep = $Damage."DAmageRep"
+$Action = $Damage."Action"
+
+    $Body += ("The device loaned to {0} has been damaged! `n" -f $Displayname) + $nl 
+    $Body += ("Teacher: {0} `n" -f $Teacher)
+    $Body += ("Device Serial Number: {0} `n" -f $Serial)
+    $Body += ("Device model: {0} `n" -f $Year) + $nl
+    $Body += ("Description of the damage: `n")
+    $Body += ("{0} `n" -f $DAmageRep) + $nl
+    $Body += ("Next Steps: `n")
+    $Body += (" - {0} " -f $Action) + $nl
+    $Body += ("- @" + "$Teaher, please ensure $Displayname returns form ASAP.") + $nl
+    #$Body += (" - @, please invoice the family, as discussed.") + $nl
+    #$Body += (" - @, please advise the family that the device will be replaced at their cost.") + $nl #>
+
+$mailprops = @{
+    From = 'damaged-devices@'
+    
+<#    To = '@' #>
+
+    To = '@','@','@',$TEMAIL,'@'
+
+    Subject = "Damaged device update - $Displayname"
+    Body = "$Body"
+    SMTPServer = 'smtpserver'
+    Port = '25'
+}
+
+Send-MailMessage @mailprops
+
+$arr = @()
+
+} 
