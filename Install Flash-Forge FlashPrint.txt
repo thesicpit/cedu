@@ -1,0 +1,34 @@
+﻿#!/bin/bash
+
+# URL of the .zip file to download
+zip_url="https://www.stg.catholic.edu.au/files/13292/FlashPrint_5.pkg.zip"
+
+# Directory where the .pkg file will be extracted
+extracted_dir="/tmp/FlashForge"
+
+# Directory where the .pkg file will be extracted
+pkg_file="/tmp/FlashForge/FlashPrint 5.pkg"
+
+# Download the .zip file
+echo "Downloading Flash-Forge.zip..."
+curl -o "/tmp/FlashPrint_5.pkg.zip" "$zip_url"
+
+# Create directory for extraction
+mkdir -p "$extracted_dir"
+
+# Extract the .zip file
+echo "Extracting Flash-Forge.zip..."
+unzip -q "/tmp/FlashPrint_5.pkg.zip" -d "$extracted_dir"
+
+# Install the .pkg file
+echo "Installing FlashPrint 5.pkg..."
+sudo installer -pkg "$pkg_file" -target /
+
+# Cleanup: Remove the downloaded .zip file and extracted directory
+echo "Cleaning up..."
+rm "/tmp/FlashPrint_5.pkg.zip"
+rm -rf "$extracted_dir"
+
+echo "Installation complete."
+
+
