@@ -1,0 +1,169 @@
+﻿#!/bin/zsh
+
+:<<ABOUT_THIS_SCRIPT
+-------------------------------------------------------------------------------
+	Written by:William Smith
+	Professional Services Engineer
+	Jamf
+	bill@talkingmoose.net
+	https://gist.github.com/cc4b1d143bcdf7d6d670ab1b30565694
+	
+	Originally posted: January 14, 2020
+	Updated: January 31, 2021
+		Converted download to use Google's IT download URL.
+		https://support.google.com/chrome/a/answer/9915669
+	Purpose: Checks version of latest available version of Google
+	Chrome online and compares with locally installed version.
+	Downloads and installs if installed version is older or doesn't
+	exist.
+	
+	Instructions: Add this script to Jamf Pro. Set parameters:
+	Parameter 4: Language
+	Except where otherwise noted, this work is licensed under
+	http://creativecommons.org/licenses/by/4.0/
+	"Always ready. Never prepared."
+	
+-------------------------------------------------------------------------------
+ABOUT_THIS_SCRIPT
+
+
+# enter the SHA 256 checksum for the download file (PKG)
+# download the package and run '/usr/bin/shasum -a 256 /path/to/googlechrome.pkg'
+# leave blank to to skip the checksum verification (less secure) or if using a $4 script parameter with Jamf Pro
+
+sha256Checksum="" # e.g. "67b1e8e036c575782b1c9188dd48fa94d9eabcb81947c8632fd4acac7b01644b"
+
+if [ "$4" != "" ] && [ "$sha256Checksum" = "" ]
+then
+	sha256Checksum=$4
+fi
+
+
+# FILE_LOCATIONS --------------------------------------------------------------
+
+
+# path to this script
+currentDirectory=$( /usr/bin/dirname "$0" )
+
+# name of this script
+currentScript=$( /usr/bin/basename -s .bash "$0" )
+
+# create log file in same directory as script
+log="/Library/Logs/$currentScript.log"
+
+
+# FUNCTIONS -------------------------------------------------------------------
+
+
+function logcomment()	{
+	/bin/date "+%Y-%m-%d %H:%M:%S	$1" >> "$log"
+	echo "$1"
+}
+
+
+function logresult()	{
+	if [ $? = 0 ] ; then
+		/bin/date "+%Y-%m-%d %H:%M:%S	$1" >> "$log"
+	else
+		/bin/date "+%Y-%m-%d %H:%M:%S	$2" >> "$log"
+	fi
+}
+
+
+# BEGIN SCRIPT ----------------------------------------------------------------
+
+
+# specify the app bundle name
+appName="Google Chrome.app"
+
+# specify the app bundle name
+packageName="googlechrome.pkg"
+
+# specify the app process name
+processName="Google Chrome"
+
+# check whether application process is running
+check=$( /usr/bin/pgrep "$processName")
+
+if [ "$check" != "" ]; then
+	
+	# get currently logged in user
+	currentUser=$( /usr/bin/stat -f "%Su" /dev/console )
+	
+	echo "Current user is $currentUser"
+	
+	# uncomment the next two lines if running this script in Jamf Pro Self Service
+	 theCommand="display dialog \"Google Chrome app is currently running. Quit Chrome and try again.\" buttons {\"Stop\"} default button {\"Stop\"} with icon file posix file \"/Applications/Google Chrome.app/Contents/Resources/app.icns\""
+	 /bin/launchctl asuser "$currentUser" sudo -iu "$currentUser" /usr/bin/osascript -e "$theCommand"
+	
+	echo "$processName is running. Aborting script"
+	exit 0
+fi
+
+# define download url
+downloadURL="https://dl.google.com/chrome/mac/stable/accept_tos%3Dhttps%253A%252F%252Fwww.google.com%252Fintl%252Fen_ph%252Fchrome%252Fterms%252F%26_and_accept_tos%3Dhttps%253A%252F%252Fpolicies.google.com%252Fterms/googlechrome.pkg" # regular release
+
+# downloadURL="https://dl.google.com/chrome/mac/beta/accept_tos%3Dhttps%253A%252F%252Fwww.google.com%252Fintl%252Fen_ph%252Fchrome%252Fterms%252F%26_and_accept_tos%3Dhttps%253A%252F%252Fpolicies.google.com%252Fterms/googlechrome.pkg" # beta release
+
+# get the latest version of Google Chrome available from omahaproxy.appspot.com page.
+latestVersion=$( /usr/bin/curl -s https://omahaproxy.appspot.com/history | awk -F',' '/mac,stable/{print $3; exit}' )
+logcomment "Latest version of Google Chrome: $latestVersion"
+
+logcomment "Latest version of $appName: $latestVersion"
+
+# Get the version number of the currently-installed app, if any.
+if [ -e "/Applications/$appName" ]; then
+	installedVersion=$( /usr/bin/defaults read "/Applications/$appName/Contents/Info.plist" CFBundleShortVersionString )
+	echo "Installed version of $appName: $installedVersion"
+	if [ ${latestVersion} = ${installedVersion} ]; then
+		logcomment "$appName is current. Exiting."
+		exit 0
+	fi
+else
+	logcomment "$appName is either not installed or not up to date."
+fi
+
+
+# create temporary working directory
+workDirectory=$( /usr/bin/basename "$0" )
+tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
+echo "Creating working directory '$tempDirectory'"
+
+# change directory to temporary working directory
+echo "Changing directory to working directory '$tempDirectory'"
+cd "$tempDirectory"
+
+# downloading software
+logcomment "Downloading installer..."
+/usr/bin/curl "$downloadURL" \
+--location \
+--silent \
+--output "googlechrome.pkg"
+logresult "Downloaded installer." "Failed to download installer."
+
+# checksum the download
+downloadChecksum=$( /usr/bin/shasum -a 256 "$tempDirectory/$packageName" | /usr/bin/awk '{ print $1 }' )
+echo "Checksum for downloaded file: $downloadChecksum"
+
+# install the download if checksum validates
+if [ "$sha256Checksum" = "$downloadChecksum" ] || [ "$sha256Checksum" = "" ]; then
+	echo "Checksum verified. Installing software..."
+	
+	# installing package
+	logcomment "Installing software..."
+	/usr/sbin/installer -pkg "$tempDirectory/$packageName" -target /
+	logresult "Installed $appName." "Failed to install $appName."
+	
+else
+	echo "Checksum failed. Recalculate the SHA 256 checksum and try again. Or download may not be valid."
+	exit 1
+fi
+
+# delete working directory
+logcomment "Deleting installer..."
+/bin/rm -R "$tempDirectory"
+logresult "Deleted working directory." "Failed to delete working directory."
+
+# END SCRIPT ----------------------------------------------------------------
+
+exit 0

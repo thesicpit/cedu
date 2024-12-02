@@ -1,0 +1,41 @@
+﻿#!/bin/bash
+
+# URL of the DMG file
+DMG_URL="https://www.stopmotionstudio.com/download/Stop%20Motion%20Studio.dmg"
+
+# Destination directory to download the DMG file
+DEST_DIR="/tmp"
+
+# Name of the downloaded DMG file
+DMG_FILE="Stop_Motion_Studio.dmg"
+
+# Download the DMG file
+echo "Downloading DMG file..."
+curl -o "$DEST_DIR/$DMG_FILE" "$DMG_URL"
+
+# Mount the DMG file
+echo "Mounting DMG file..."
+hdiutil attach "$DEST_DIR/$DMG_FILE"
+
+# Find the mounted volume
+MOUNTED_VOLUME=$(ls /Volumes | grep "Stop Motion Studio")
+
+# Install the application
+if [ -n "$MOUNTED_VOLUME" ]; then
+    echo "Installing Stop Motion Studio..."
+    cp -R "/Volumes/$MOUNTED_VOLUME/Stop Motion Studio.app" /Applications
+    echo "Installation complete."
+else
+    echo "Failed to find mounted volume. Installation aborted."
+    exit 1
+fi
+
+# Unmount the DMG file
+echo "Unmounting DMG file..."
+hdiutil detach "/Volumes/$MOUNTED_VOLUME"
+
+echo "Cleanup..."
+# Clean up the downloaded DMG file
+rm "$DEST_DIR/$DMG_FILE"
+
+echo "Installation finished."

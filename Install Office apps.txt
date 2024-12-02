@@ -1,0 +1,101 @@
+﻿#!/bin/bash
+
+# JAMF parameter $4 should contain a comma-separated list of apps (e.g., "Word,Excel,Teams")
+app_list="$4"
+
+# Function to download and install a package
+download_and_install() {
+    local app_name=$1
+    local url=$2
+    local output_path="/tmp/${app_name}.pkg"
+
+    echo "Downloading $app_name..."
+    curl -L -o "$output_path" "$url"
+
+    # Check if the installer downloaded successfully
+    if [[ -f "$output_path" ]]; then
+        echo "$app_name downloaded successfully."
+    else
+        echo "Failed to download $app_name. Exiting."
+        exit 1
+    fi
+
+    # Install the downloaded package
+    echo "Installing $app_name..."
+    sudo installer -pkg "$output_path" -target /
+
+    # Check if installation was successful
+    if [[ $? -eq 0 ]]; then
+        echo "$app_name installed successfully."
+        # Clean up installer
+        rm -f "$output_path"
+    else
+        echo "$app_name installation failed. Exiting."
+        exit 1
+    fi
+}
+
+# Function to get the download URL for each application
+get_app_url() {
+    local app_name=$(echo "$1" | tr '[:upper:]' '[:lower:]' | xargs) # Normalize input
+
+    case "$app_name" in
+        word)
+            echo "https://go.microsoft.com/fwlink/?linkid=525134"
+            ;;
+        excel)
+            echo "https://go.microsoft.com/fwlink/?linkid=525135"
+            ;;
+        powerpoint)
+            echo "https://go.microsoft.com/fwlink/?linkid=525136"
+            ;;
+        outlook)
+            echo "https://go.microsoft.com/fwlink/?linkid=525137"
+            ;;
+        onenote)
+            echo "https://go.microsoft.com/fwlink/?linkid=820886"
+            ;;
+        onedrive)
+            echo "https://go.microsoft.com/fwlink/?linkid=823060"
+            ;;
+        teams)
+            echo "https://go.microsoft.com/fwlink/?linkid=869428"
+            ;;
+        todo)
+            echo "https://go.microsoft.com/fwlink/?linkid=2155670"
+            ;;
+        autoupdate)
+            echo "https://go.microsoft.com/fwlink/?linkid=830196"
+            ;;
+        rdp)
+            echo "https://go.microsoft.com/fwlink/?linkid=868963" # Microsoft Remote Desktop
+            ;;
+        vscode)
+            echo "https://code.visualstudio.com/sha/download?build=stable&os=darwin-universal" # Visual Studio Code
+            ;;
+        edge)
+            echo "https://go.microsoft.com/fwlink/?linkid=2069148" # Microsoft Edge
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+# Parse the comma-separated app list and install each specified app
+IFS=',' read -ra selected_apps <<< "$app_list"
+for app_name in "${selected_apps[@]}"; do
+    app_name=$(echo "$app_name" | xargs) # Trim whitespace
+    url=$(get_app_url "$app_name")
+    
+    if [[ -n "$url" ]]; then
+        download_and_install "$app_name" "$url"
+    else
+        echo "$app_name is not a valid application name or URL is missing. Skipping..."
+    fi
+done
+
+echo "Selected Microsoft applications have been installed successfully."
+
+# Exit script
+exit 0

@@ -1,0 +1,8 @@
+﻿#!/bin/bash
+ 
+for user in `find /Users -maxdepth 1 -type d ! -name jamf ! -name jssadmin ! -name Shared ! -name ladmin ! -name mbadmin ! -name trt ! -name ladmin2 ! -name macadmin ! -name casperadmin -mindepth 1 |cut -d/ -f3`
+    do
+        /usr/sbin/dseditgroup -o edit -d $user -t user admin
+        echo Removed $user from admin group
+    done
+exit 0

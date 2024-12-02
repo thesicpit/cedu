@@ -1,0 +1,117 @@
+﻿#!/bin/bash
+
+# Variables
+PACKAGE_ID="com.handbrake.installer"  # Package receipt identifier
+TEMP_DMG="/tmp/HandBrake-latest.dmg"
+RECEIPT_PATH="/var/db/receipts/${PACKAGE_ID}.plist"
+APP_PATH="/Applications/HandBrake.app"
+DEBUG=true  # Set to false to disable debug output
+JAMF_DISPLAY_MESSAGE=true  # Display JAMF message when updated
+
+# Function to fetch the latest version of HandBrake
+get_latest_version() {
+    local release_data
+    release_data=$(curl -s https://api.github.com/repos/HandBrake/HandBrake/releases/latest)
+
+    # Extract latest version and DMG URL
+    LATEST_VERSION=$(echo "$release_data" | jq -r '.tag_name' | sed 's/^v//')
+    DMG_URL=$(echo "$release_data" | jq -r '.assets[] | select(.name | endswith(".dmg")) | .browser_download_url' | head -n 1)
+
+    if [[ "$DEBUG" == true ]]; then
+        echo "Latest Version: $LATEST_VERSION"
+        echo "DMG URL: $DMG_URL"
+    fi
+}
+
+# Function to get the currently installed version
+get_installed_version() {
+    if [[ -d "$APP_PATH" ]]; then
+        INSTALLED_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
+    else
+        INSTALLED_VERSION=""
+    fi
+
+    if [[ "$DEBUG" == true ]]; then
+        echo "Installed Version: ${INSTALLED_VERSION:-None}"
+    fi
+}
+
+# Fetch versions
+get_latest_version
+get_installed_version
+
+# Compare installed and latest versions
+if [[ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]]; then
+    echo "HandBrake is up-to-date (version $INSTALLED_VERSION). No action required."
+    exit 0
+fi
+
+echo "Updating HandBrake: Installed version ($INSTALLED_VERSION), Latest version ($LATEST_VERSION)."
+
+# Download the HandBrake DMG
+echo "Downloading HandBrake from $DMG_URL..."
+curl -L -o "$TEMP_DMG" "$DMG_URL" --fail
+
+if [[ ! -f "$TEMP_DMG" ]]; then
+    echo "Download failed. Exiting."
+    exit 1
+fi
+
+# Mount the DMG
+echo "Mounting HandBrake DMG..."
+MOUNT_POINT=$(hdiutil attach "$TEMP_DMG" -nobrowse | grep "/Volumes/" | awk '{print $3}')
+
+if [[ -z "$MOUNT_POINT" ]]; then
+    echo "Failed to mount DMG. Exiting."
+    exit 1
+fi
+
+# Install HandBrake
+if [[ -d "$APP_PATH" ]]; then
+    echo "Removing old version of HandBrake..."
+    rm -rf "$APP_PATH"
+fi
+
+echo "Copying HandBrake to Applications folder..."
+cp -R "$MOUNT_POINT/HandBrake.app" "$APP_PATH"
+
+if [[ -d "$APP_PATH" ]]; then
+    echo "HandBrake installed successfully (version $LATEST_VERSION)."
+else
+    echo "Installation failed. Exiting."
+    hdiutil detach "$MOUNT_POINT"
+    exit 1
+fi
+
+# Unmount the DMG
+echo "Unmounting DMG..."
+hdiutil detach "$MOUNT_POINT"
+
+# Clean up
+echo "Cleaning up..."
+rm -f "$TEMP_DMG"
+
+# Update the receipt
+echo "Updating package receipt..."
+cat <<-EOF >"$RECEIPT_PATH"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PackageIdentifier</key>
+    <string>$PACKAGE_ID</string>
+    <key>InstallDate</key>
+    <date>$(date -u +"%Y-%m-%dT%H:%M:%SZ")</date>
+    <key>Version</key>
+    <string>$LATEST_VERSION</string>
+</dict>
+</plist>
+EOF
+
+# Display JAMF message
+if [[ "$JAMF_DISPLAY_MESSAGE" == true ]]; then
+    jamf displayMessage -message "HandBrake has been updated to version $LATEST_VERSION."
+fi
+
+echo "Update complete."
+exit 0

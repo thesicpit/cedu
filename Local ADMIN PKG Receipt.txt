@@ -1,0 +1,15 @@
+﻿#!/bin/bash
+
+## PKG Receipt for the smart group targeting.
+## Increment this every year to ensure the new version is installed.
+
+packageReceipt="$4"
+
+## Create dummy receipt to mark complete
+touch /Library/Receipts/"$packageReceipt"
+#com.mbadmin.2024.bom
+
+## Update Jamf Inventory
+/usr/local/bin/jamf recon
+
+dscacheutil -flushcache

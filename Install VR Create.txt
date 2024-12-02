@@ -1,0 +1,27 @@
+﻿#!/bin/bash
+
+# Define the identifier of the VR Suite package
+PACKAGE_ID="com.stg.vr-suite_2-5-0_3572_mac.2.5.0-3572"
+
+# Check if the package is installed
+if pkgutil --pkg-info "$PACKAGE_ID" > /dev/null 2>&1; then
+    echo "VR Suite is already installed. Skipping installation."
+    exit 0
+fi
+
+# Define the URL of the VR Suite download
+VR_SUITE_URL="https://present4d.com/vrs-download/VR-Suite_2-5-0_3572_MAC.zip"
+
+# Define the directory to download and install VR Suite
+#INSTALL_DIR="$HOME/Applications/"
+INSTALL_DIR="/Applications"
+
+echo "Downloading VR Suite..."
+# Download VR Suite zip file using curl
+curl -L "$VR_SUITE_URL" -o "/tmp/VR-Suite.zip"
+
+echo "Extracting VR Suite..."
+# Extract the downloaded zip file to the installation directory with progress indicator
+unzip -q "/tmp/VR-Suite.zip" -d "$INSTALL_DIR"
+
+echo "Installation complete."

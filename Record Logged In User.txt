@@ -1,0 +1,11 @@
+﻿#!/bin/bash
+
+dateStamp=$(date "+%a %b %d %H:%M:%S")
+
+currentUserUserName="$3"
+
+currentUserFullName=$(/usr/bin/id -F "$currentUserUserName")
+
+logFile="/private/var/log/logins.log"
+
+echo "${dateStamp}: ${currentUserFullName} (${currentUserUserName})" >> $logFile

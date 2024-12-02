@@ -1,0 +1,5 @@
+﻿#!/bin/bash
+
+/usr/bin/killall sharingd
+
+exit 0

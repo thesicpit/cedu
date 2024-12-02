@@ -1,0 +1,12 @@
+﻿#!/bin/bash
+
+## NAPLAN Receipt for the smart group targeting.
+## Increment this every year to ensure the new version is installed.
+
+## Create dummy receipt to mark complete
+touch /Library/Receipts/com.naplanpkg.2024.bom
+
+## Update Jamf Inventory
+/usr/local/bin/jamf recon
+
+dscacheutil -flushcache

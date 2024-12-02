@@ -1,0 +1,16 @@
+﻿#!/bin/zsh
+
+# lpadmin -p STG_Reports -L "Down Stairs" -E -o printer-is-shared=false -v ipp://10.38.54.70/ipp/print -P "/Library/Printers/PPDs/Contents/Resources/FF Apeos C5570 PS.gz"
+
+# Script created by PrinterSetup
+/usr/sbin/lpadmin -p "STG Reports" \
+-E \
+-D " " \
+-P "/Library/Printers/PPDs/Contents/Resources/FF Apeos C5570 PS.gz" \
+-L "Down Stairs" \
+-v ipp://10.38.54.70/ipp/print \
+-o FFOutputOptions=FinisherTypeGC \
+-o FFBookletTray=True \
+-o FFTriFoldOutputTray=True \
+-o FFSideOutputTray=True \
+-o printer-is-shared=False 

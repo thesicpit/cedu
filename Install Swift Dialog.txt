@@ -1,0 +1,25 @@
+﻿#!/bin/bash
+
+# Function to fetch the latest release tag from the GitHub API
+get_latest_release() {
+  curl --silent "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | 
+  grep '"tag_name":' |                                             # Get tag line
+  sed -E 's/.*"([^"]+)".*/\1/'                                     # Extract tag
+}
+
+# Get the latest release tag
+latest_release=$(get_latest_release)
+
+# Construct the download URL for the .pkg file
+download_url="https://github.com/swiftDialog/swiftDialog/releases/download/${latest_release}/swiftDialog.pkg"
+
+# Download the latest SwiftDialog .pkg file
+curl -L -o "/tmp/swiftDialog.pkg" "$download_url"
+
+# Install the downloaded .pkg file
+sudo installer -pkg "/tmp/swiftDialog.pkg" -target /
+
+# Clean up
+rm "/tmp/swiftDialog.pkg"
+
+echo "SwiftDialog has been installed successfully."
