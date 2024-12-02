@@ -1,0 +1,117 @@
+# #!/bin/bash
+
+# URL of the DMG file
+#DMG_URL="https://github.com/brick-a-brack/eagle-animation/releases/download/v2.3.1/eagle-animation-2.3.1-mac.dmg"
+# DMG_URL="$4"
+# Destination directory to download the DMG file
+# DEST_DIR="/tmp"
+
+# Name of the downloaded DMG file
+# DMG_FILE="eagle-animation.dmg"
+
+# Mount point for the DMG file
+# MOUNT_POINT="/Volumes/Eagle Animation"
+
+# Download the DMG file
+# echo "Downloading DMG file..."
+# curl -Lo "$DEST_DIR/$DMG_FILE" "$DMG_URL"
+
+# Mount the DMG file
+# echo "Mounting DMG file..."
+# hdiutil attach "$DEST_DIR/$DMG_FILE"
+
+# Find the mounted volume
+# MOUNTED_VOLUME=$(ls /Volumes | grep "Eagle Animation")
+
+# Install the application
+# if [ -n "$MOUNTED_VOLUME" ]; then
+#     echo "Installing Eagle Animation..."
+#     cp -R "/Volumes/$MOUNTED_VOLUME/Eagle Animation.app" /Applications
+#     echo "Installation complete."
+# else
+#     echo "Failed to find mounted volume. Installation aborted."
+#     exit 1
+# fi
+
+# Unmount the DMG file
+# echo "Unmounting DMG file..."
+# hdiutil detach "/Volumes/$MOUNTED_VOLUME"
+
+# echo "Cleanup..."
+# Clean up the downloaded DMG file
+# rm "$DEST_DIR/$DMG_FILE"
+
+# xattr -c "/Applications/Eagle\ Animation.app" 
+
+# echo "Installation finished."
+
+#!/bin/bash
+
+# URL for Eagle Animation version 2.3.1 DMG file
+DMG_URL="https://github.com/brick-a-brack/eagle-animation/releases/download/v2.3.1/eagle-animation-2.3.1-mac.dmg"
+
+# Destination directory to download the DMG file
+DEST_DIR="/tmp"
+
+# Name of the downloaded DMG file
+DMG_FILE="eagle-animation.dmg"
+
+# Mount point for the DMG file
+MOUNT_POINT="/Volumes/Eagle Animation"
+
+# Application path
+APP_NAME="Eagle Animation.app"
+APP_PATH="/Applications/$APP_NAME"
+
+# Install Rosetta 2 if needed for Apple Silicon Macs
+if [[ $(uname -m) == 'arm64' ]]; then
+    echo "Installing Rosetta 2 for Apple Silicon..."
+    /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+fi
+
+# Download the specific version 2.3.1 DMG file
+echo "Downloading DMG file for version 2.3.1..."
+curl -Lo "$DEST_DIR/$DMG_FILE" "$DMG_URL"
+
+# Check if the application is already installed and remove it
+if [ -d "$APP_PATH" ]; then
+    echo "Removing existing application at $APP_PATH..."
+    rm -rf "$APP_PATH"
+fi
+
+# Mount the DMG file
+echo "Mounting DMG file..."
+hdiutil attach "$DEST_DIR/$DMG_FILE"
+
+# Find the mounted volume
+MOUNTED_VOLUME=$(ls /Volumes | grep "Eagle Animation")
+
+# Install the application
+if [ -n "$MOUNTED_VOLUME" ]; then
+    echo "Installing Eagle Animation..."
+    cp -R "/Volumes/$MOUNTED_VOLUME/Eagle Animation.app" /Applications
+    echo "Installation complete."
+else
+    echo "Failed to find mounted volume. Installation aborted."
+    exit 1
+fi
+
+# Grant executable permissions to the app
+echo "Granting executable permissions..."
+chmod -R 755 "$APP_PATH"
+
+# Remove quarantine attribute to bypass Gatekeeper issues
+echo "Removing quarantine attribute..."
+xattr -dr com.apple.quarantine "$APP_PATH"
+
+# Unmount the DMG file
+echo "Unmounting DMG file..."
+hdiutil detach "/Volumes/$MOUNTED_VOLUME"
+
+# Clean up the downloaded DMG file
+echo "Cleanup..."
+rm "$DEST_DIR/$DMG_FILE"
+
+echo "Installation of Eagle Animation version 2.3.1 finished."
+
+
