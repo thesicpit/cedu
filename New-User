@@ -137,6 +137,7 @@ Write-Progress -Activity Break -Status "$($seconds - $_) seconds remaining..." -
 Start-Sleep -Seconds 1
 }
 
+<#
 Connect-AzureAD
 #Get all users's UPN and OnjectID
 $users = Get-AzureADUser | Select-Object UserPrincipalName, ObjectID
@@ -145,8 +146,8 @@ $users = Get-AzureADUser | Select-Object UserPrincipalName, ObjectID
 #$DN2 = Read-Host "Please enter the destination users Windows username"
 $DN2 = $UserLike
 # Set the UserPrincipalName of the user to be removed from all groups
-$Pie = $DN1 + "@"
-$Sauce = $DN2 + "@"
+$Pie = $DN1 + "@stg.catholic.edu.au"
+$Sauce = $DN2 + "@stg.catholic.edu.au"
 
 # Get ObjectId based on username of user to copy from and user to copy to
 $Sauces = Get-AzureADUser -ObjectID $Sauce
@@ -165,4 +166,57 @@ Write-Host "Done"
 }
 # Disconnect from your Azure AD tenant
 Disconnect-AzureAD
- 
+#>
+
+# Enable TLS 1.2 for secure connection
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+# Read contents of CSV file and sort
+$csv = 'C:\Scripts\New Staff Template.csv'
+$Users = Import-Csv -Delimiter "," -Path $csv | Sort-Object "Preferred Name" -Descending
+
+# Connect to AzureAD
+Connect-AzureAD
+
+foreach ($User in $Users) {
+    # Identify the Sauce user (the one to copy from)
+    $UserLike = $User.UserLike
+    $DN1 = $User."First Initial" + $User."Family Name"
+    $DN2 = $UserLike
+
+    # Construct UserPrincipalNames
+    $Sauce = "$DN2@stg.catholic.edu.au"  # The user to copy from
+    $Pie = "$DN1@stg.catholic.edu.au"    # The user to copy to
+
+    # Get the Sauce user object
+    $SauceUser = Get-AzureADUser -ObjectId $Sauce
+    if (-not $SauceUser) {
+        Write-Host "Source user $Sauce not found. Skipping..." -ForegroundColor Red
+        continue
+    }
+
+    # Get the Pie user object
+    $PieUser = Get-AzureADUser -ObjectId $Pie
+    if (-not $PieUser) {
+        Write-Host "Target user $Pie not found. Skipping..." -ForegroundColor Red
+        continue
+    }
+
+    # Get the group memberships for the Sauce user
+    $membershipGroups = Get-AzureADUserMembership -ObjectId $SauceUser.ObjectId
+
+    Write-Host "`n-- Groups available to copy from $Sauce to $Pie --" -ForegroundColor Yellow
+
+    foreach ($group in $membershipGroups) {
+        Write-Host "Adding $Pie to $($group.DisplayName)... " -ForegroundColor Yellow -NoNewline
+        
+        try {
+            Add-AzureADGroupMember -ObjectId $group.ObjectId -RefObjectId $PieUser.ObjectId
+            Write-Host "Done"
+        } catch {
+            Write-Host "Failed to add $Pie to $($group.DisplayName): $_" -ForegroundColor Red
+        }
+    }
+}
+
+# Disconnect from Azure AD
+Disconnect-AzureAD
